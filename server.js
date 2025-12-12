@@ -17,9 +17,25 @@ const io = new Server(server, {
 });
 
 // ⭐ MIDDLEWARE MUST COME FIRST - BEFORE ROUTES! ⭐
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// CORS with explicit mobile app support
+app.use(cors({
+  origin: '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Increase payload size limits for mobile apps
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request timeout middleware - give mobile apps more time
+app.use((req, res, next) => {
+  // Set timeout to 30 seconds for all requests
+  req.setTimeout(30000);
+  res.setTimeout(30000);
+  next();
+});
 
 // Test database connection
 pool.query("SELECT NOW()", (err, res) => {
@@ -116,9 +132,16 @@ app.use((err, req, res, next) => {
 // Start server
 const PORT = process.env.PORT || 5000;
 const HOST = '0.0.0.0'; // Listen on all network interfaces
+
+// Set server timeouts for better mobile app compatibility
+server.timeout = 60000; // 60 seconds
+server.keepAliveTimeout = 65000; // 65 seconds (slightly more than timeout)
+server.headersTimeout = 66000; // 66 seconds (slightly more than keepAliveTimeout)
+
 server.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
   console.log(`📱 Access from mobile: http://192.168.1.181:${PORT}`);
+  console.log(`⏱️  Request timeout: 30s | Server timeout: 60s`);
 });
 
 module.exports = app;

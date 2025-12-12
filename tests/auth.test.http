@@ -1,0 +1,144 @@
+### Authentication API Tests
+### You can use this file with VS Code REST Client extension or similar tools
+
+### Variables
+@baseUrl = http://localhost:3000
+@contentType = application/json
+
+### ============================================
+### SIGNUP TESTS
+### ============================================
+
+### Test 1: Successful Registration
+POST {{baseUrl}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "first_name": "John",
+  "last_name": "Doe",
+  "email": "john.doe@example.com",
+  "password": "SecurePass123"
+}
+
+### Test 2: Registration with Missing Fields
+POST {{baseUrl}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "first_name": "Jane",
+  "email": "jane@example.com"
+}
+
+### Test 3: Registration with Invalid Email
+POST {{baseUrl}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "first_name": "Bob",
+  "last_name": "Smith",
+  "email": "invalid-email",
+  "password": "SecurePass123"
+}
+
+### Test 4: Registration with Weak Password
+POST {{baseUrl}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "first_name": "Alice",
+  "last_name": "Johnson",
+  "email": "alice@example.com",
+  "password": "weak"
+}
+
+### Test 5: Registration with Short Names
+POST {{baseUrl}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "first_name": "A",
+  "last_name": "B",
+  "email": "ab@example.com",
+  "password": "SecurePass123"
+}
+
+### Test 6: Registration with Special Characters in Name
+POST {{baseUrl}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "first_name": "Mary-Jane",
+  "last_name": "O'Connor",
+  "email": "mary.jane@example.com",
+  "password": "SecurePass123"
+}
+
+### Test 7: Duplicate Email Registration
+POST {{baseUrl}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "first_name": "John",
+  "last_name": "Duplicate",
+  "email": "john.doe@example.com",
+  "password": "SecurePass123"
+}
+
+### ============================================
+### LOGIN TESTS
+### ============================================
+
+### Test 8: Successful Login
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "john.doe@example.com",
+  "password": "SecurePass123"
+}
+
+### Test 9: Login with Wrong Password
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "john.doe@example.com",
+  "password": "WrongPassword123"
+}
+
+### Test 10: Login with Non-existent Email
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "notfound@example.com",
+  "password": "SecurePass123"
+}
+
+### Test 11: Login with Missing Password
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "john.doe@example.com"
+}
+
+### Test 12: Login with Invalid Email Format
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "invalid-email",
+  "password": "SecurePass123"
+}
+
+### ============================================
+### AUTHENTICATED ENDPOINT TEST
+### ============================================
+
+### Test 13: Access Protected Route (Replace TOKEN with actual token from login)
+GET {{baseUrl}}/api/users/profile
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### Test 14: Access Protected Route without Token
+GET {{baseUrl}}/api/users/profile

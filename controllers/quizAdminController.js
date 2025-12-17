@@ -248,12 +248,12 @@ exports.getQuizAnalytics = async (req, res) => {
 
     // Recent attempts
     const recentResult = await pool.query(
-      `SELECT 
+      `SELECT
         uqa.id,
         uqa.score_percentage,
         uqa.passed,
         uqa.completed_at,
-        u.username,
+        CONCAT(u.first_name, ' ', u.last_name) as username,
         u.email
        FROM user_quiz_attempts uqa
        JOIN users u ON uqa.user_id = u.id
@@ -296,9 +296,9 @@ exports.getQuizAttempts = async (req, res) => {
     const { limit = 50, offset = 0 } = req.query;
 
     const result = await pool.query(
-      `SELECT 
+      `SELECT
         uqa.*,
-        u.username,
+        CONCAT(u.first_name, ' ', u.last_name) as username,
         u.email
        FROM user_quiz_attempts uqa
        JOIN users u ON uqa.user_id = u.id
@@ -331,9 +331,9 @@ exports.viewUserAttempt = async (req, res) => {
 
     // Get attempt details
     const attemptResult = await pool.query(
-      `SELECT 
+      `SELECT
         uqa.*,
-        u.username,
+        CONCAT(u.first_name, ' ', u.last_name) as username,
         u.email,
         q.name as quiz_name
        FROM user_quiz_attempts uqa

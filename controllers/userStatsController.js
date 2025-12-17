@@ -44,7 +44,7 @@ const getUserStats = async (req, res) => {
     // Get bookmarks count
     const bookmarks = await pool.query(
       `SELECT COUNT(*) as bookmarks_count
-      FROM user_ayah_bookmarks
+      FROM user_bookmarks
       WHERE user_id = $1`,
       [userId]
     );

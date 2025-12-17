@@ -5,7 +5,7 @@ const bcrypt = require("bcrypt");
 exports.getProfile = async (req, res) => {
   try {
     const user = await pool.query(
-      "SELECT id, first_name, last_name, email, created_at, password_updated_at FROM users WHERE id = $1",
+      "SELECT id, first_name, last_name, email, created_at, updated_at FROM users WHERE id = $1",
       [req.user.id],
     );
 
@@ -14,7 +14,7 @@ exports.getProfile = async (req, res) => {
     }
 
     const userData = user.rows[0];
-    console.log('📊 Profile request - User ID:', userData.id, 'Password updated at:', userData.password_updated_at);
+    console.log('📊 Profile request - User ID:', userData.id);
 
     res.json(userData);
   } catch (err) {
@@ -120,11 +120,11 @@ exports.updatePassword = async (req, res) => {
 
     // Update password and timestamp
     const updateResult = await pool.query(
-      "UPDATE users SET password = $1, password_updated_at = NOW() WHERE id = $2 RETURNING password_updated_at",
+      "UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2 RETURNING updated_at",
       [hashedPassword, req.user.id]
     );
 
-    const updatedAt = updateResult.rows[0].password_updated_at;
+    const updatedAt = updateResult.rows[0].updated_at;
     console.log('🔐 Password updated for user ID:', req.user.id, 'New timestamp:', updatedAt);
 
     res.json({
@@ -198,10 +198,10 @@ exports.deactivateAccount = async (req, res) => {
       return res.status(400).json({ error: "Incorrect password" });
     }
 
-    // Deactivate user (set status to inactive)
+    // Deactivate user (set is_active to false)
     await pool.query(
-      "UPDATE users SET status = $1 WHERE id = $2",
-      ["inactive", req.user.id]
+      "UPDATE users SET is_active = $1 WHERE id = $2",
+      [false, req.user.id]
     );
 
     res.json({ message: "Account deactivated successfully" });

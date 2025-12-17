@@ -12,9 +12,12 @@ const adminAuthMiddleware = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Get user from database
+    // Get user from database with role information
     const result = await pool.query(
-      'SELECT id, first_name, last_name, email, role FROM users WHERE id = $1',
+      `SELECT u.id, u.first_name, u.last_name, u.email, u.role_id, r.role_name as role
+       FROM users u
+       LEFT JOIN roles r ON u.role_id = r.id
+       WHERE u.id = $1`,
       [decoded.id]
     );
 

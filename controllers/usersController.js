@@ -8,7 +8,7 @@ const getAllUsers = async (req, res) => {
         u.first_name,
         u.last_name,
         u.email,
-        u.role,
+        r.role_name as role,
         u.created_at,
         COUNT(DISTINCT uqa.id) as total_quiz_attempts,
         COUNT(DISTINCT CASE WHEN uqa.passed = true THEN uqa.id END) as passed_quizzes,
@@ -16,11 +16,12 @@ const getAllUsers = async (req, res) => {
         COUNT(DISTINCT utp.id) as topics_in_progress,
         COUNT(DISTINCT uab.id) as total_bookmarks
       FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
       LEFT JOIN user_quiz_attempts uqa ON u.id = uqa.user_id
       LEFT JOIN user_topic_progress utp ON u.id = utp.user_id
-      LEFT JOIN user_ayah_bookmarks uab ON u.id = uab.user_id
-      WHERE u.role != 'superuser'
-      GROUP BY u.id, u.first_name, u.last_name, u.email, u.role, u.created_at
+      LEFT JOIN user_bookmarks uab ON u.id = uab.user_id
+      WHERE u.role_id != 1
+      GROUP BY u.id, u.first_name, u.last_name, u.email, r.role_name, u.created_at
       ORDER BY u.created_at DESC
     `;
     const result = await pool.query(query);
@@ -35,7 +36,10 @@ const getUserAnalytics = async (req, res) => {
   try {
     const { userId } = req.params;
     const userResult = await pool.query(
-      'SELECT id, first_name, last_name, email, role, created_at FROM users WHERE id = $1',
+      `SELECT u.id, u.first_name, u.last_name, u.email, r.role_name as role, u.created_at
+       FROM users u
+       LEFT JOIN roles r ON u.role_id = r.id
+       WHERE u.id = $1`,
       [userId]
     );
     if (userResult.rows.length === 0) {
@@ -58,11 +62,11 @@ const getUserAnalytics = async (req, res) => {
     );
 
     const bookmarksResult = await pool.query(
-      `SELECT uab.id, uab.surah_number, uab.ayah_number, uab.notes, uab.created_at,
-              s.surah_name_english, s.surah_name_arabic
-       FROM user_ayah_bookmarks uab
-       LEFT JOIN surahs s ON uab.surah_number = s.surah_number
-       WHERE uab.user_id = $1 ORDER BY uab.created_at DESC`,
+      `SELECT ub.id, ub.topic_id, ub.created_at,
+              t.title as topic_title, t.category
+       FROM user_bookmarks ub
+       LEFT JOIN topics t ON ub.topic_id = t.id
+       WHERE ub.user_id = $1 ORDER BY ub.created_at DESC`,
       [userId]
     );
 
@@ -130,12 +134,12 @@ const getPlatformStats = async (req, res) => {
   try {
     const stats = await pool.query(`
       SELECT
-        (SELECT COUNT(*) FROM users WHERE role != 'superuser') as total_users,
+        (SELECT COUNT(*) FROM users WHERE role_id != 1) as total_users,
         (SELECT COUNT(*) FROM user_quiz_attempts) as total_quiz_attempts,
         (SELECT COUNT(*) FROM user_quiz_attempts WHERE status = 'completed') as completed_quizzes,
         (SELECT COALESCE(AVG(score_percentage), 0) FROM user_quiz_attempts WHERE status = 'completed') as avg_quiz_score,
         (SELECT COUNT(DISTINCT user_id) FROM user_topic_progress) as active_learners,
-        (SELECT COUNT(*) FROM user_ayah_bookmarks) as total_bookmarks,
+        (SELECT COUNT(*) FROM user_bookmarks) as total_bookmarks,
         (SELECT COUNT(*) FROM topics) as total_topics,
         (SELECT COUNT(*) FROM quizzes) as total_quizzes
     `);

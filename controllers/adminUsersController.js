@@ -8,18 +8,18 @@ exports.getAllUsers = async (req, res) => {
 
     let query = `
       SELECT
-        id,
-        first_name,
-        last_name,
-        email,
-        role,
-        status,
-        email_verified,
-        provider,
-        created_at,
-        last_login,
-        password_updated_at
-      FROM users
+        u.id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        r.role_name as role,
+        u.is_active,
+        u.email_verified,
+        u.provider,
+        u.created_at,
+        u.last_login
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
       WHERE 1=1
     `;
 
@@ -37,17 +37,18 @@ exports.getAllUsers = async (req, res) => {
       paramCount++;
     }
 
-    // Add status filter
+    // Add status filter (is_active)
     if (status) {
-      query += ` AND status = $${paramCount}`;
-      params.push(status);
+      const isActive = status === 'active';
+      query += ` AND u.is_active = $${paramCount}`;
+      params.push(isActive);
       paramCount++;
     }
 
     // Get total count
     const countQuery = `SELECT COUNT(*) FROM users WHERE 1=1${
       search ? ` AND (first_name ILIKE $1 OR last_name ILIKE $1 OR email ILIKE $1)` : ''
-    }${status ? ` AND status = $${params.length}` : ''}`;
+    }${status ? ` AND is_active = $${params.length}` : ''}`;
 
     const countResult = await pool.query(countQuery, params);
     const totalUsers = parseInt(countResult.rows[0].count);
@@ -94,7 +95,10 @@ exports.deleteUserByAdmin = async (req, res) => {
 
     // Check if user exists
     const userCheck = await pool.query(
-      'SELECT id, email, role FROM users WHERE id = $1',
+      `SELECT u.id, u.email, r.role_name as role
+       FROM users u
+       LEFT JOIN roles r ON u.role_id = r.id
+       WHERE u.id = $1`,
       [userId]
     );
 
@@ -105,8 +109,8 @@ exports.deleteUserByAdmin = async (req, res) => {
       });
     }
 
-    // Prevent deleting other admins
-    if (userCheck.rows[0].role === 'admin') {
+    // Prevent deleting other admins or superusers
+    if (userCheck.rows[0].role === 'admin' || userCheck.rows[0].role === 'superuser') {
       return res.status(403).json({
         success: false,
         error: 'Cannot delete another admin account'
@@ -152,9 +156,10 @@ exports.updateUserStatus = async (req, res) => {
       });
     }
 
+    const isActive = status === 'active';
     const result = await pool.query(
-      'UPDATE users SET status = $1 WHERE id = $2 RETURNING id, email, status',
-      [status, userId]
+      'UPDATE users SET is_active = $1 WHERE id = $2 RETURNING id, email, is_active',
+      [isActive, userId]
     );
 
     if (result.rows.length === 0) {

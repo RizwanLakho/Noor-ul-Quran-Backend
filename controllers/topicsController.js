@@ -58,7 +58,6 @@ const getTopicById = async (req, res) => {
         ta.topic_id,
         ta.sura as surah_number,
         ta.aya as ayah_number,
-        ta.notes,
         ta.display_order,
         qt.text as ayah_arabic,
         qtr.text as translation,
@@ -156,9 +155,9 @@ const createTopic = async (req, res) => {
       for (let i = 0; i < ayahs.length; i++) {
         const ayah = ayahs[i];
         await client.query(
-          `INSERT INTO topic_ayahs (topic_id, sura, aya, notes, display_order, added_by)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [topicId, ayah.sura, ayah.aya, ayah.notes || null, i, userId],
+          `INSERT INTO topic_ayahs (topic_id, sura, aya, display_order, added_by)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [topicId, ayah.sura, ayah.aya, i, userId],
         );
       }
       console.log(`✅ ${ayahs.length} ayahs added`);
@@ -254,9 +253,9 @@ const updateTopic = async (req, res) => {
       for (let i = 0; i < ayahs.length; i++) {
         const ayah = ayahs[i];
         await client.query(
-          `INSERT INTO topic_ayahs (topic_id, sura, aya, notes, display_order, added_by)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [id, ayah.sura, ayah.aya, ayah.notes || null, i, userId],
+          `INSERT INTO topic_ayahs (topic_id, sura, aya, display_order, added_by)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [id, ayah.sura, ayah.aya, i, userId],
         );
       }
       console.log(`✅ ${ayahs.length} ayahs updated`);

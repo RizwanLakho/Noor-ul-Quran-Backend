@@ -18,6 +18,10 @@ router.get(
   topicsController.getAllTopics,
 );
 
+// Specific routes MUST come BEFORE dynamic :id route
+router.get("/meta/categories", topicsController.getCategories);
+router.get("/meta/popular", topicsController.getPopularTopics);
+
 router.get(
   "/:id",
   (req, res, next) => {
@@ -30,9 +34,6 @@ router.get(
   },
   topicsController.getTopicById,
 );
-
-router.get("/meta/categories", topicsController.getCategories);
-router.get("/meta/popular", topicsController.getPopularTopics);
 
 // ADMIN ROUTES (Superuser only)
 router.post(

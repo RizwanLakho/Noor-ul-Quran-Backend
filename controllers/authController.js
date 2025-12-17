@@ -185,9 +185,12 @@ exports.login = async (req, res) => {
   }
 
   try {
-    // Find user
+    // Find user with role
     const result = await pool.query(
-      "SELECT * FROM users WHERE email = $1",
+      `SELECT u.*, r.role_name as role
+       FROM users u
+       LEFT JOIN roles r ON u.role_id = r.id
+       WHERE u.email = $1`,
       [email.toLowerCase()]
     );
 

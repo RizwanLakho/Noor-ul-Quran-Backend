@@ -44,9 +44,15 @@ router.get('/user/all',
 );
 
 // Get user statistics
-router.get('/user/stats', 
-  authenticateToken, 
+router.get('/user/stats',
+  authenticateToken,
   progressController.getUserStats
+);
+
+// Record Quran reading session (Surah/Juz)
+router.post('/reading-session',
+  authenticateToken,
+  progressController.recordReadingSession
 );
 
 module.exports = router;

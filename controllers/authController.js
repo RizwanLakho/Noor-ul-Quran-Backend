@@ -233,15 +233,15 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check if email is verified (optional - you can disable this check)
-    // if (!user.email_verified && user.provider === 'email') {
-    //   return res.status(403).json({
-    //     success: false,
-    //     error: "Please verify your email before logging in",
-    //     requiresVerification: true,
-    //     email: user.email
-    //   });
-    // }
+    // Check if email is verified - REQUIRED for security
+    if (!user.email_verified && user.provider === 'email') {
+      return res.status(403).json({
+        success: false,
+        error: "Please verify your email before logging in",
+        requiresVerification: true,
+        email: user.email
+      });
+    }
 
     // Reset login attempts on successful login
     await pool.query(
@@ -444,6 +444,195 @@ exports.resendVerification = async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to resend verification email. Please try again."
+    });
+  }
+};
+
+// =====================================================
+// FORGOT PASSWORD
+// =====================================================
+
+exports.forgotPassword = async (req, res) => {
+  console.log("🔑 Forgot password request");
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({
+      success: false,
+      error: "Email is required"
+    });
+  }
+
+  try {
+    // Find user by email
+    const result = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email.toLowerCase()]
+    );
+
+    // Always return success message for security (don't reveal if email exists)
+    if (result.rows.length === 0) {
+      return res.json({
+        success: true,
+        message: "If your email is registered, you will receive a password reset code shortly."
+      });
+    }
+
+    const user = result.rows[0];
+
+    // Allow password reset for all users (verified or not)
+    // This helps users who forgot password before verifying email
+
+    // Generate reset token (6-digit code similar to email verification)
+    const resetToken = generateVerificationToken();
+    const tokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Save reset token to database
+    await pool.query(
+      `UPDATE users
+       SET reset_password_token = $1,
+           reset_password_expires = $2
+       WHERE id = $3`,
+      [resetToken, tokenExpiry, user.id]
+    );
+
+    // Send password reset email with OTP
+    try {
+      await sendPasswordResetEmail(email, user.first_name, resetToken);
+      console.log('✅ Password reset email sent to:', email);
+    } catch (emailError) {
+      console.error('❌ Failed to send reset email:', emailError);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to send reset email. Please try again."
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Password reset code sent to your email. Please check your inbox."
+    });
+
+  } catch (error) {
+    console.error("❌ Forgot password error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Server error. Please try again."
+    });
+  }
+};
+
+// =====================================================
+// RESET PASSWORD
+// =====================================================
+
+exports.resetPassword = async (req, res) => {
+  console.log("🔐 Reset password request");
+  const { token, newPassword, email } = req.body;
+
+  // Validation
+  if (!token || !newPassword) {
+    return res.status(400).json({
+      success: false,
+      error: "Reset code and new password are required"
+    });
+  }
+
+  // Password strength validation
+  if (newPassword.length < 8) {
+    return res.status(400).json({
+      success: false,
+      error: "Password must be at least 8 characters long"
+    });
+  }
+
+  if (!/\d/.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      error: "Password must contain at least one number"
+    });
+  }
+
+  if (!/[A-Z]/.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      error: "Password must contain at least one uppercase letter"
+    });
+  }
+
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      error: "Password must contain at least one special character"
+    });
+  }
+
+  try {
+    // Support both full token and 6-character code
+    let result;
+    if (token.length === 6) {
+      // Short code verification - match first 6 characters (case-insensitive)
+      result = await pool.query(
+        `SELECT * FROM users
+         WHERE UPPER(LEFT(reset_password_token, 6)) = UPPER($1)
+         AND reset_password_expires > NOW()`,
+        [token]
+      );
+    } else {
+      // Full token verification
+      result = await pool.query(
+        `SELECT * FROM users
+         WHERE reset_password_token = $1
+         AND reset_password_expires > NOW()`,
+        [token]
+      );
+    }
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid or expired reset code. Please request a new one."
+      });
+    }
+
+    const user = result.rows[0];
+
+    // If email is provided, verify it matches
+    if (email && user.email.toLowerCase() !== email.toLowerCase()) {
+      return res.status(400).json({
+        success: false,
+        error: "Reset code does not match the email provided"
+      });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update password and clear reset token
+    await pool.query(
+      `UPDATE users
+       SET password = $1,
+           reset_password_token = NULL,
+           reset_password_expires = NULL,
+           login_attempts = 0,
+           locked_until = NULL
+       WHERE id = $2`,
+      [hashedPassword, user.id]
+    );
+
+    console.log('✅ Password reset successful for:', user.email);
+
+    res.json({
+      success: true,
+      message: "Password reset successful! You can now log in with your new password."
+    });
+
+  } catch (error) {
+    console.error("❌ Reset password error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to reset password. Please try again."
     });
   }
 };

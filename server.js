@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const { Server } = require("socket.io");
 const http = require("http");
+const path = require("path");
 const pool = require("./config/db");
 require("dotenv").config();
 
@@ -37,6 +38,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve static files for profile pictures
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Test database connection
 pool.query("SELECT NOW()", (err, res) => {
   if (err) {
@@ -64,7 +68,8 @@ app.get("/", (req, res) => {
       '/api/quizzes',
       '/api/translations',
       '/api/user-analytics',
-      '/api/juz'
+      '/api/juz',
+      '/api/reading-goals'
     ]
   });
 });
@@ -80,8 +85,12 @@ const translationsRoutes = require("./routes/translationsRoutes");
 const usersAnalyticsRoutes = require('./routes/usersRoutes');
 const juzRoutes = require('./routes/juzRoutes');
 const userStatsRoutes = require('./routes/userStatsRoutes');
+const streakRoutes = require('./routes/streakRoutes');
 const dailyGoalsRoutes = require('./routes/dailyGoalsRoutes');
+const readingGoalsRoutes = require('./routes/readingGoalsRoutes');
 const adminUsersRoutes = require('./routes/adminUsersRoutes');
+const ayahBookmarksRoutes = require('./routes/ayahBookmarksRoutes');
+const notificationsRoutes = require('./routes/notificationsRoutes');
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users/me", userRoutes); // Profile, email, password, account routes
@@ -93,8 +102,12 @@ app.use("/api/translations", translationsRoutes);
 app.use("/api/user-analytics", usersAnalyticsRoutes);
 app.use("/api/juz", juzRoutes);
 app.use("/api/users/me", userStatsRoutes); // Stats and activity routes
+app.use("/api/users/me/streak", streakRoutes); // Streak tracking
+app.use("/api/notifications", notificationsRoutes); // Notifications
 app.use("/api/goals", dailyGoalsRoutes);
+app.use("/api/reading-goals", readingGoalsRoutes); // Reading goals with custom duration
 app.use("/api/admin", adminUsersRoutes); // Admin user management
+app.use("/api/ayah-bookmarks", ayahBookmarksRoutes); // Ayah bookmarks
 
 // Health check endpoint for Docker
 app.get("/api/health", (req, res) => {
@@ -138,10 +151,16 @@ server.timeout = 60000; // 60 seconds
 server.keepAliveTimeout = 65000; // 65 seconds (slightly more than timeout)
 server.headersTimeout = 66000; // 66 seconds (slightly more than keepAliveTimeout)
 
+// Initialize notification scheduler
+const { initializeScheduler } = require('./services/notificationScheduler');
+
 server.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
   console.log(`📱 Access from mobile: http://192.168.1.181:${PORT}`);
   console.log(`⏱️  Request timeout: 30s | Server timeout: 60s`);
+
+  // Start notification scheduler
+  initializeScheduler();
 });
 
 module.exports = app;

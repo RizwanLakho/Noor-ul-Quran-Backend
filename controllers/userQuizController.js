@@ -7,7 +7,7 @@ const pool = require('../config/db');
 const startQuizAttempt = async (req, res) => {
   try {
     const { id: quizId } = req.params;
-    const userId = req.user?.id || null; // Get user ID from auth token if available
+    const userId = req.user.id; // User ID from auth token (REQUIRED - authentication mandatory)
 
     console.log('📝 Starting quiz attempt:', { quizId, userId });
 
@@ -23,6 +23,37 @@ const startQuizAttempt = async (req, res) => {
 
     const quiz = quizCheck.rows[0];
 
+    // ⚠️ CHECK: Has user already completed this quiz? (ONE-TIME QUIZ RESTRICTION)
+    const completedCheck = await pool.query(
+      `SELECT id, score_percentage, passed, completed_at
+       FROM user_quiz_attempts
+       WHERE user_id = $1 AND quiz_id = $2 AND status = 'completed'
+       LIMIT 1`,
+      [userId, quizId]
+    );
+
+    if (completedCheck.rows.length > 0) {
+      const previousAttempt = completedCheck.rows[0];
+      return res.status(403).json({
+        success: false,
+        error: 'Quiz already completed',
+        message: 'You have already completed this quiz. Each quiz can only be taken once.',
+        previous_result: {
+          attempt_id: previousAttempt.id,
+          score_percentage: previousAttempt.score_percentage,
+          passed: previousAttempt.passed,
+          completed_at: previousAttempt.completed_at
+        }
+      });
+    }
+
+    // Check for any in-progress attempts and clean them up
+    await pool.query(
+      `DELETE FROM user_quiz_attempts
+       WHERE user_id = $1 AND quiz_id = $2 AND status = 'in_progress'`,
+      [userId, quizId]
+    );
+
     // Get question count for this quiz
     const questionCount = await pool.query(
       'SELECT COUNT(*) as count FROM quiz_questions WHERE quiz_id = $1',
@@ -31,22 +62,17 @@ const startQuizAttempt = async (req, res) => {
 
     const totalQuestions = parseInt(questionCount.rows[0].count);
 
-    // Create quiz attempt record (if user is authenticated)
-    let attemptId = null;
+    // Create quiz attempt record
+    const attemptResult = await pool.query(
+      `INSERT INTO user_quiz_attempts
+      (user_id, quiz_id, total_questions, status)
+      VALUES ($1, $2, $3, 'in_progress')
+      RETURNING id`,
+      [userId, quizId, totalQuestions]
+    );
 
-    if (userId) {
-      const attemptResult = await pool.query(
-        `INSERT INTO user_quiz_attempts
-        (user_id, quiz_id, total_questions, status)
-        VALUES ($1, $2, $3, 'in_progress')
-        RETURNING id`,
-        [userId, quizId, totalQuestions]
-      );
-      attemptId = attemptResult.rows[0].id;
-      console.log('✅ Quiz attempt created with ID:', attemptId);
-    } else {
-      console.log('⚠️ Guest user - no attempt record created');
-    }
+    const attemptId = attemptResult.rows[0].id;
+    console.log('✅ Quiz attempt created with ID:', attemptId);
 
     res.json({
       success: true,
@@ -76,7 +102,7 @@ const submitQuizAttempt = async (req, res) => {
 
     const { id: quizId } = req.params;
     const { attemptId, answers } = req.body;
-    const userId = req.user?.id || null;
+    const userId = req.user.id; // User ID from auth token (REQUIRED)
 
     console.log('📤 Submitting quiz:', { quizId, attemptId, answersCount: answers?.length, userId });
 
@@ -130,8 +156,8 @@ const submitQuizAttempt = async (req, res) => {
           isCorrect: isCorrect
         });
 
-        // Save individual answer if attemptId is provided
-        if (attemptId && userId) {
+        // Save individual answer
+        if (attemptId) {
           await client.query(
             `INSERT INTO user_quiz_answers (attempt_id, question_id, selected_answer, is_correct)
              VALUES ($1, $2, $3, $4)
@@ -149,8 +175,8 @@ const submitQuizAttempt = async (req, res) => {
 
     console.log(`📊 Results: ${correctAnswers}/${totalQuestions} correct (${percentage}%) - ${passed ? 'PASSED' : 'FAILED'}`);
 
-    // Update attempt record if exists
-    if (attemptId && userId) {
+    // Update attempt record
+    if (attemptId) {
       await client.query(
         `UPDATE user_quiz_attempts
          SET correct_answers = $1,
@@ -198,7 +224,7 @@ const submitQuizAttempt = async (req, res) => {
 const getQuizAttemptReview = async (req, res) => {
   try {
     const { attemptId } = req.params;
-    const userId = req.user?.id || null;
+    const userId = req.user.id; // User ID from auth token (REQUIRED)
 
     console.log('📖 Getting quiz review:', { attemptId, userId });
 
@@ -217,9 +243,9 @@ const getQuizAttemptReview = async (req, res) => {
 
     const attempt = attemptResult.rows[0];
 
-    // Check if user has permission to view (optional - if auth is enabled)
-    if (userId && attempt.user_id !== userId) {
-      return res.status(403).json({ error: 'Access denied' });
+    // Check if user has permission to view this attempt
+    if (attempt.user_id !== userId) {
+      return res.status(403).json({ error: 'Access denied - You can only view your own quiz attempts' });
     }
 
     // Get detailed answers with questions

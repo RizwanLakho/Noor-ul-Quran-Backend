@@ -366,4 +366,81 @@ exports.getUserStats = async (req, res) => {
   }
 };
 
+// ============================================================
+// QURAN READING SESSION TRACKING
+// ============================================================
+
+// Record Quran reading session (Surah/Juz reading)
+exports.recordReadingSession = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      type, // 'surah' or 'juz' or 'topic'
+      surah_number,
+      juz_number,
+      topic_id,
+      ayahs_read, // Number of ayahs read in this session
+      time_spent_seconds, // Time spent in seconds
+      last_ayah_read, // Last ayah number user read
+    } = req.body;
+
+    // Validation
+    if (!type || !time_spent_seconds || !ayahs_read) {
+      return res.status(400).json({
+        success: false,
+        error: 'type, ayahs_read, and time_spent_seconds are required'
+      });
+    }
+
+    if (type === 'surah' && !surah_number) {
+      return res.status(400).json({
+        success: false,
+        error: 'surah_number is required for surah reading'
+      });
+    }
+
+    if (type === 'juz' && !juz_number) {
+      return res.status(400).json({
+        success: false,
+        error: 'juz_number is required for juz reading'
+      });
+    }
+
+    // Insert reading session into database
+    await pool.query(
+      `INSERT INTO reading_sessions
+       (user_id, session_type, surah_number, juz_number, topic_id, ayahs_read, time_spent_seconds, last_ayah_read, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)`,
+      [userId, type, surah_number, juz_number, topic_id, ayahs_read, time_spent_seconds, last_ayah_read]
+    );
+
+    // Update user engagement stats
+    await pool.query(
+      `INSERT INTO user_engagement_stats (user_id, verses_recited, total_time_seconds, updated_at)
+       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+       ON CONFLICT (user_id)
+       DO UPDATE SET
+         verses_recited = user_engagement_stats.verses_recited + EXCLUDED.verses_recited,
+         total_time_seconds = user_engagement_stats.total_time_seconds + EXCLUDED.total_time_seconds,
+         updated_at = CURRENT_TIMESTAMP`,
+      [userId, ayahs_read, time_spent_seconds]
+    );
+
+    res.json({
+      success: true,
+      message: 'Reading session recorded successfully',
+      data: {
+        ayahs_read,
+        time_spent_seconds
+      }
+    });
+  } catch (err) {
+    console.error('Record reading session error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Server error'
+    });
+  }
+};
+
 module.exports = exports;

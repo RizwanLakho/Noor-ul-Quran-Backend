@@ -5,7 +5,7 @@ const bcrypt = require("bcrypt");
 exports.getProfile = async (req, res) => {
   try {
     const user = await pool.query(
-      "SELECT id, first_name, last_name, email, created_at, updated_at FROM users WHERE id = $1",
+      "SELECT id, first_name, last_name, email, profile_picture, created_at, updated_at FROM users WHERE id = $1",
       [req.user.id],
     );
 
@@ -14,6 +14,14 @@ exports.getProfile = async (req, res) => {
     }
 
     const userData = user.rows[0];
+
+    // Convert relative profile picture path to full URL
+    if (userData.profile_picture && !userData.profile_picture.startsWith('http')) {
+      const protocol = req.protocol;
+      const host = req.get('host');
+      userData.profile_picture = `${protocol}://${host}${userData.profile_picture}`;
+    }
+
     console.log('📊 Profile request - User ID:', userData.id);
 
     res.json(userData);
@@ -207,6 +215,45 @@ exports.deactivateAccount = async (req, res) => {
     res.json({ message: "Account deactivated successfully" });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// Upload profile picture
+exports.uploadProfilePicture = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const userId = req.user.id;
+    const filename = req.file.filename;
+    const filePath = `/uploads/profile-pictures/${filename}`;
+
+    // Get the protocol and host from the request
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const fullUrl = `${protocol}://${host}${filePath}`;
+
+    // Update database with profile picture path
+    const result = await pool.query(
+      "UPDATE users SET profile_picture = $1, updated_at = NOW() WHERE id = $2 RETURNING id, first_name, last_name, email, profile_picture",
+      [filePath, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    console.log('📸 Profile picture uploaded - User ID:', userId, 'File:', filename);
+
+    res.json({
+      message: "Profile picture uploaded successfully",
+      profile_picture: fullUrl,
+      user: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Error uploading profile picture:', err);
     res.status(500).json({ error: "Server error" });
   }
 };

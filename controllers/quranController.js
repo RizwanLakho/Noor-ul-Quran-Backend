@@ -125,25 +125,54 @@ exports.getAyahsByRange = async (req, res) => {
 // Search in Quran
 exports.searchQuran = async (req, res) => {
   try {
-    const { q } = req.query;
+    const { q, page = 1, limit = 20 } = req.query;
 
     if (!q || q.trim().length < 2) {
       return res.status(400).json({
         error: "Search query must be at least 2 characters",
-        example: "/api/quran/search?q=الله",
+        example: "/api/quran/search?q=الله&page=1&limit=20",
       });
     }
 
     const searchTerm = q.trim();
     const normalizedSearch = normalizeArabic(searchTerm);
 
+    // Parse pagination params
+    const pageNum = parseInt(page) || 1;
+    const limitNum = Math.min(parseInt(limit) || 20, 100); // Max 100 per page
+    const offset = (pageNum - 1) * limitNum;
+
+    // First, get total count
+    const countResult = await pool.query(
+      `SELECT COUNT(*) as total
+       FROM quran_text qt
+       WHERE
+         REGEXP_REPLACE(
+           REGEXP_REPLACE(
+             REGEXP_REPLACE(
+               REGEXP_REPLACE(qt.text, '[ًٌٍَُِّْٰ٠-٩]', '', 'g'),
+               '[أإآٱ]', 'ا', 'g'
+             ),
+             'ة', 'ه', 'g'
+           ),
+           'ى', 'ي', 'g'
+         ) LIKE $1`,
+      [`%${normalizedSearch}%`],
+    );
+
+    const totalResults = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(totalResults / limitNum);
+    const hasMore = pageNum < totalPages;
+
     // Normalize text in SQL using REGEXP_REPLACE for flexible Arabic search
     // Remove diacritics, normalize Alef forms, normalize Taa Marboota and Yaa
     const result = await pool.query(
       `SELECT qt.index, qt.sura, qt.aya, qt.text,
-              s.surah_name_arabic, s.surah_name_english
+              s.surah_name_arabic, s.surah_name_english,
+              tr.text as translation, tr.translator, tr.language
        FROM quran_text qt
        JOIN surahs s ON qt.sura = s.surah_number
+       LEFT JOIN quran_translation tr ON qt.sura = tr.sura AND qt.aya = tr.aya AND tr.language = 'en'
        WHERE
          REGEXP_REPLACE(
            REGEXP_REPLACE(
@@ -156,15 +185,21 @@ exports.searchQuran = async (req, res) => {
            'ى', 'ي', 'g'
          ) LIKE $1
        ORDER BY qt.sura, qt.aya
-       LIMIT 100`,
-      [`%${normalizedSearch}%`],
+       LIMIT $2 OFFSET $3`,
+      [`%${normalizedSearch}%`, limitNum, offset],
     );
 
     res.json({
       success: true,
       query: searchTerm,
       normalized_query: normalizedSearch,
-      total_results: result.rows.length,
+      pagination: {
+        current_page: pageNum,
+        per_page: limitNum,
+        total_results: totalResults,
+        total_pages: totalPages,
+        has_more: hasMore,
+      },
       results: result.rows,
     });
   } catch (err) {

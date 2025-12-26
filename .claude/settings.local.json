@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm run docker:dev:*)",
+      "Bash(docker exec:*)",
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}

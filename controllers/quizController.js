@@ -22,8 +22,9 @@ exports.getAllQuizzes = async (req, res) => {
 
     if (userId) {
       query += `,
-        COUNT(DISTINCT uqa.id) FILTER (WHERE uqa.user_id = $1) as user_attempts,
-        MAX(uqa.score_percentage) FILTER (WHERE uqa.user_id = $1) as best_score
+        COUNT(DISTINCT uqa.id) FILTER (WHERE uqa.user_id = $1 AND uqa.status = 'completed') as user_attempts,
+        MAX(uqa.score_percentage) FILTER (WHERE uqa.user_id = $1 AND uqa.status = 'completed') as best_score,
+        BOOL_OR(uqa.status = 'completed' AND uqa.user_id = $1) as has_completed
       `;
     }
 
@@ -91,17 +92,27 @@ exports.getQuizById = async (req, res) => {
     // Get user's attempts if logged in
     if (userId) {
       const attemptsResult = await pool.query(
-        `SELECT COUNT(*) as attempt_count, MAX(score_percentage) as best_score
+        `SELECT
+          COUNT(*) as attempt_count,
+          MAX(score_percentage) as best_score,
+          MAX(completed_at) as last_completed_at,
+          BOOL_OR(status = 'completed') as has_completed
          FROM user_quiz_attempts
          WHERE quiz_id = $1 AND user_id = $2 AND status = 'completed'`,
         [id, userId]
       );
       quiz.user_stats = attemptsResult.rows[0];
+      quiz.can_attempt = !attemptsResult.rows[0].has_completed; // Can only attempt if not completed
+    } else {
+      quiz.can_attempt = true; // Guest users can attempt (but need to login)
     }
 
     res.json({
       success: true,
-      quiz: quiz
+      quiz: quiz,
+      message: quiz.user_stats && quiz.user_stats.has_completed
+        ? 'You have already completed this quiz. Each quiz can only be taken once.'
+        : undefined
     });
   } catch (err) {
     console.error('Get quiz by ID error:', err);
@@ -125,6 +136,46 @@ exports.startQuiz = async (req, res) => {
       return res.status(404).json({ error: 'Quiz not found' });
     }
 
+    // ⚠️ CHECK: Has user already completed this quiz? (ONE-TIME QUIZ RESTRICTION)
+    const completedCheck = await pool.query(
+      `SELECT id, score_percentage, passed, completed_at
+       FROM user_quiz_attempts
+       WHERE user_id = $1 AND quiz_id = $2 AND status = 'completed'
+       LIMIT 1`,
+      [userId, id]
+    );
+
+    if (completedCheck.rows.length > 0) {
+      const previousAttempt = completedCheck.rows[0];
+      return res.status(403).json({
+        success: false,
+        error: 'Quiz already completed',
+        message: 'You have already completed this quiz. Each quiz can only be taken once.',
+        previous_result: {
+          attempt_id: previousAttempt.id,
+          score_percentage: previousAttempt.score_percentage,
+          passed: previousAttempt.passed,
+          completed_at: previousAttempt.completed_at
+        }
+      });
+    }
+
+    // Check for any in-progress attempts
+    const inProgressCheck = await pool.query(
+      `SELECT id FROM user_quiz_attempts
+       WHERE user_id = $1 AND quiz_id = $2 AND status = 'in_progress'
+       LIMIT 1`,
+      [userId, id]
+    );
+
+    // If there's an in-progress attempt, delete it and start fresh
+    if (inProgressCheck.rows.length > 0) {
+      await pool.query(
+        'DELETE FROM user_quiz_attempts WHERE id = $1',
+        [inProgressCheck.rows[0].id]
+      );
+    }
+
     // Get questions (WITHOUT correct_answer)
     const questionsResult = await pool.query(
       `SELECT id, question_text, option_a, option_b, option_c, option_d, question_order
@@ -138,7 +189,7 @@ exports.startQuiz = async (req, res) => {
       return res.status(400).json({ error: 'Quiz has no questions yet' });
     }
 
-    // Create attempt
+    // Create new attempt
     const attemptResult = await pool.query(
       `INSERT INTO user_quiz_attempts (user_id, quiz_id, total_questions, status)
        VALUES ($1, $2, $3, 'in_progress')
@@ -148,6 +199,7 @@ exports.startQuiz = async (req, res) => {
 
     res.json({
       success: true,
+      message: 'Quiz started successfully. Remember: You can only take this quiz once!',
       attempt_id: attemptResult.rows[0].id,
       quiz: quizCheck.rows[0],
       questions: questionsResult.rows,

@@ -5,6 +5,8 @@ const {
   login,
   verifyEmail,
   resendVerification,
+  forgotPassword,
+  resetPassword,
   googleAuth,
   facebookAuth,
   getCurrentUser
@@ -23,6 +25,10 @@ router.post("/login", loginValidation, validate, login);
 // Email Verification
 router.post("/verify-email", verifyEmail);
 router.post("/resend-verification", resendVerification);
+
+// Password Reset
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
 
 // OAuth Authentication
 router.post("/google", googleAuth);

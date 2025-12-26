@@ -242,6 +242,96 @@ curl -X POST http://localhost:5000/api/auth/login \
     "password": "StrongPassword@123"
   }'
 ```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Login successful!",
+  "data": {
+    "user": {
+      "id": 1,
+      "firstName": "John",
+      "lastName": "Doe",
+      "email": "user@example.com",
+      "emailVerified": true
+    },
+    "token": "eyJhbGciOiJIUzI1..."
+  }
+}
+```
+
+#### POST /api/auth/verify-email
+Verify email with OTP code
+```bash
+curl -X POST http://localhost:5000/api/auth/verify-email \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "ABC123"
+  }'
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Email verified successfully! You can now log in with full access."
+}
+```
+
+#### POST /api/auth/resend-verification
+Resend verification email
+```bash
+curl -X POST http://localhost:5000/api/auth/resend-verification \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com"
+  }'
+```
+
+#### POST /api/auth/forgot-password
+Request password reset (sends OTP to email)
+```bash
+curl -X POST http://localhost:5000/api/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com"
+  }'
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Password reset code sent to your email. Please check your inbox."
+}
+```
+**Important Notes:**
+- ✅ Only verified accounts can reset passwords
+- ❌ Unverified accounts will receive error: "Please verify your email first"
+- 📧 6-digit OTP code sent to email (expires in 1 hour)
+- 🔒 Security: Always returns success even if email doesn't exist
+
+#### POST /api/auth/reset-password
+Reset password using OTP code
+```bash
+curl -X POST http://localhost:5000/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "ABC123",
+    "newPassword": "NewStrongPassword@456",
+    "email": "user@example.com"
+  }'
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Password reset successful! You can now log in with your new password."
+}
+```
+**Password Requirements:**
+- Minimum 8 characters
+- At least 1 uppercase letter
+- At least 1 number
+- At least 1 special character (!@#$%^&*(),.?":{}|<>)
 
 #### POST /api/auth/refresh
 Refresh JWT token

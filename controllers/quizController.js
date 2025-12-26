@@ -10,14 +10,21 @@ exports.getAllQuizzes = async (req, res) => {
     const { category, difficulty } = req.query;
     const userId = req.user ? req.user.id : null;
 
+    console.log('📋 getAllQuizzes called for userId:', userId);
+
     let query = `
-      SELECT 
-        q.*,
-        COUNT(DISTINCT qq.id) as question_count,
-        CASE 
-          WHEN q.time_limit_minutes = 0 THEN 'No time limit'
-          ELSE q.time_limit_minutes || ' minutes'
-        END as time_limit_display
+      SELECT
+        q.id,
+        q.name as title,
+        q.description,
+        q.category,
+        q.difficulty,
+        q.passing_score,
+        q.time_limit_minutes as time_limit,
+        q.is_active,
+        q.display_order,
+        q.created_at,
+        COUNT(DISTINCT qq.id) as total_questions
     `;
 
     if (userId) {
@@ -25,6 +32,12 @@ exports.getAllQuizzes = async (req, res) => {
         COUNT(DISTINCT uqa.id) FILTER (WHERE uqa.user_id = $1 AND uqa.status = 'completed') as user_attempts,
         MAX(uqa.score_percentage) FILTER (WHERE uqa.user_id = $1 AND uqa.status = 'completed') as best_score,
         BOOL_OR(uqa.status = 'completed' AND uqa.user_id = $1) as has_completed
+      `;
+    } else {
+      query += `,
+        0 as user_attempts,
+        NULL as best_score,
+        false as has_completed
       `;
     }
 
@@ -34,7 +47,7 @@ exports.getAllQuizzes = async (req, res) => {
     `;
 
     if (userId) {
-      query += `LEFT JOIN user_quiz_attempts uqa ON q.id = uqa.quiz_id `;
+      query += `LEFT JOIN user_quiz_attempts uqa ON q.id = uqa.quiz_id AND uqa.user_id = $1 `;
     }
 
     query += `WHERE q.is_active = true `;
@@ -55,7 +68,17 @@ exports.getAllQuizzes = async (req, res) => {
 
     query += ` GROUP BY q.id ORDER BY q.display_order, q.created_at DESC`;
 
+    console.log('🔍 Executing query with params:', params);
     const result = await pool.query(query, params);
+
+    // Log the results for debugging
+    console.log('✅ Quiz results:', result.rows.map(r => ({
+      id: r.id,
+      title: r.title,
+      has_completed: r.has_completed,
+      best_score: r.best_score,
+      user_attempts: r.user_attempts
+    })));
 
     res.json({
       success: true,
@@ -63,7 +86,7 @@ exports.getAllQuizzes = async (req, res) => {
       quizzes: result.rows
     });
   } catch (err) {
-    console.error('Get all quizzes error:', err);
+    console.error('❌ Get all quizzes error:', err);
     res.status(500).json({ error: 'Server error', details: err.message });
   }
 };

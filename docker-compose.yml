@@ -59,6 +59,12 @@ services:
       REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET:-your_jwt_secret_change_in_production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your_refresh_secret_change_in_production}
+      # Email Configuration
+      EMAIL_HOST: smtp.gmail.com
+      EMAIL_PORT: 587
+      EMAIL_USER: myofficeid192@gmail.com
+      EMAIL_PASSWORD: wggakamwoigtagxk
+      EMAIL_FROM: Noor-ul-Quran App <myofficeid192@gmail.com>
     ports:
       - "5000:5000"
     volumes:

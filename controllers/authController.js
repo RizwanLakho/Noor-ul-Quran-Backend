@@ -128,12 +128,27 @@ exports.register = async (req, res) => {
 
     // Send verification email
     let emailSent = false;
+    const verificationCode = verificationToken.substring(0, 6).toUpperCase();
+
+    // LOG VERIFICATION CODE FOR DEVELOPMENT
+    console.log('');
+    console.log('═══════════════════════════════════════════════');
+    console.log('📧 NEW USER REGISTRATION');
+    console.log('═══════════════════════════════════════════════');
+    console.log('Email:', email);
+    console.log('Name:', `${userFirstName} ${userLastName}`);
+    console.log('🔐 VERIFICATION CODE:', verificationCode);
+    console.log('⏰ Expires:', tokenExpiry.toLocaleString());
+    console.log('═══════════════════════════════════════════════');
+    console.log('');
+
     try {
       await sendVerificationEmail(email, userFirstName, verificationToken);
       emailSent = true;
       console.log('✅ Verification email sent to:', email);
     } catch (emailError) {
       console.error('❌ Failed to send verification email:', emailError);
+      console.error('⚠️  User can still verify using code above');
       // Don't fail registration if email fails
     }
 
@@ -414,6 +429,7 @@ exports.resendVerification = async (req, res) => {
     // Generate new token
     const verificationToken = generateVerificationToken();
     const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const verificationCode = verificationToken.substring(0, 6).toUpperCase();
 
     await pool.query(
       `UPDATE users
@@ -429,10 +445,27 @@ exports.resendVerification = async (req, res) => {
       [user.id, email, verificationToken]
     );
 
-    // Send email
-    await sendVerificationEmail(email, user.first_name, verificationToken);
+    // LOG VERIFICATION CODE FOR DEVELOPMENT
+    console.log('');
+    console.log('═══════════════════════════════════════════════');
+    console.log('🔄 RESEND VERIFICATION CODE');
+    console.log('═══════════════════════════════════════════════');
+    console.log('Email:', email);
+    console.log('Name:', user.first_name, user.last_name);
+    console.log('🔐 VERIFICATION CODE:', verificationCode);
+    console.log('⏰ Expires:', tokenExpiry.toLocaleString());
+    console.log('═══════════════════════════════════════════════');
+    console.log('');
 
-    console.log('✅ Verification email resent to:', email);
+    // Send email
+    try {
+      await sendVerificationEmail(email, user.first_name, verificationToken);
+      console.log('✅ Verification email resent to:', email);
+    } catch (emailError) {
+      console.error('❌ Failed to send verification email:', emailError);
+      console.error('⚠️  User can still verify using code above');
+      throw emailError;
+    }
 
     res.json({
       success: true,

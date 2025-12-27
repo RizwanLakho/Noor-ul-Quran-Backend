@@ -91,6 +91,7 @@ const readingGoalsRoutes = require('./routes/readingGoalsRoutes');
 const adminUsersRoutes = require('./routes/adminUsersRoutes');
 const ayahBookmarksRoutes = require('./routes/ayahBookmarksRoutes');
 const notificationsRoutes = require('./routes/notificationsRoutes');
+const wordByWordRoutes = require('./routes/wordByWordRoutes');
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users/me", userRoutes); // Profile, email, password, account routes
@@ -108,6 +109,7 @@ app.use("/api/goals", dailyGoalsRoutes);
 app.use("/api/reading-goals", readingGoalsRoutes); // Reading goals with custom duration
 app.use("/api/admin", adminUsersRoutes); // Admin user management
 app.use("/api/ayah-bookmarks", ayahBookmarksRoutes); // Ayah bookmarks
+app.use("/api/word-by-word", wordByWordRoutes); // Word-by-word Quran data
 
 // Health check endpoint for Docker
 app.get("/api/health", (req, res) => {

@@ -3,20 +3,62 @@ const pool = require('../config/db');
 // Get all quizzes
 const getAllQuizzes = async (req, res) => {
   try {
-    const query = `
-      SELECT 
-        q.*,
-        COUNT(qq.id) as total_questions,
-        COUNT(DISTINCT uqa.user_id) as total_attempts
-      FROM quizzes q
-      LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
-      LEFT JOIN user_quiz_attempts uqa ON q.id = uqa.quiz_id
-      WHERE q.is_active = true
-      GROUP BY q.id
-      ORDER BY q.created_at DESC
-    `;
+    // Get user ID from auth (if logged in)
+    const userId = req.user ? req.user.id : null;
 
-    const result = await pool.query(query);
+    let query, queryParams;
+
+    if (userId) {
+      // If user is logged in, get user-specific data
+      query = `
+        SELECT
+          q.*,
+          COUNT(DISTINCT qq.id) as total_questions,
+          -- User-specific stats
+          CASE
+            WHEN MAX(CASE WHEN uqa.user_id = $1 AND uqa.status = 'completed' THEN 1 ELSE 0 END) = 1
+            THEN true
+            ELSE false
+          END as has_completed,
+          MAX(CASE WHEN uqa.user_id = $1 AND uqa.status = 'completed' THEN uqa.score_percentage ELSE 0 END) as best_score,
+          COUNT(DISTINCT CASE WHEN uqa.user_id = $1 THEN uqa.id ELSE NULL END) as user_attempts
+        FROM quizzes q
+        LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
+        LEFT JOIN user_quiz_attempts uqa ON q.id = uqa.quiz_id
+        WHERE q.is_active = true
+        GROUP BY q.id
+        ORDER BY q.created_at DESC
+      `;
+      queryParams = [userId];
+    } else {
+      // If not logged in, return basic quiz info
+      query = `
+        SELECT
+          q.*,
+          COUNT(DISTINCT qq.id) as total_questions,
+          false as has_completed,
+          0 as best_score,
+          0 as user_attempts
+        FROM quizzes q
+        LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
+        WHERE q.is_active = true
+        GROUP BY q.id
+        ORDER BY q.created_at DESC
+      `;
+      queryParams = [];
+    }
+
+    const result = await pool.query(query, queryParams);
+
+    console.log(`📊 Quizzes fetched for user ${userId || 'guest'}:`,
+      result.rows.map(q => ({
+        id: q.id,
+        title: q.title,
+        has_completed: q.has_completed,
+        best_score: q.best_score,
+        user_attempts: q.user_attempts
+      }))
+    );
 
     res.json({
       success: true,
